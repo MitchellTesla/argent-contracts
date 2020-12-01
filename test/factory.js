@@ -155,6 +155,13 @@ contract("WalletFactory", (accounts) => {
       );
     });
 
+    it("should fail to create with owner as guardian", async () => {
+      await truffleAssert.reverts(
+        factory.createWallet(owner, versionManager.address, owner, 1),
+        "WF: owner cannot be guardian",
+      );
+    });
+
     it("should fail to create with unregistered module", async () => {
       const randomAddress = utils.getRandomAddress();
       await truffleAssert.reverts(factory.createWallet(owner, randomAddress, guardian, 1),
