@@ -29,7 +29,7 @@ import "../modules/common/IVersionManager.sol";
  * @notice The WalletFactory contract creates and assigns wallets to accounts.
  * @author Julien Niset - <julien@argent.xyz>
  */
-contract WalletFactory is Owned, Managed {
+contract WalletFactory is Owned {
 
     // The address of the module dregistry
     address public moduleRegistry;
@@ -37,11 +37,14 @@ contract WalletFactory is Owned, Managed {
     address public walletImplementation;
     // The address of the GuardianStorage
     address public guardianStorage;
+    // The managers
+    mapping (address => bool) public managers;
 
     // *************** Events *************************** //
 
     event ModuleRegistryChanged(address addr);
     event WalletCreated(address indexed wallet, address indexed owner, address indexed guardian);
+    event ManagerAdded(address indexed _manager);
 
     // *************** Constructor ********************** //
 
@@ -58,28 +61,17 @@ contract WalletFactory is Owned, Managed {
     }
 
     // *************** External Functions ********************* //
+
     /**
-     * @notice Lets the manager create a wallet for an owner account.
-     * The wallet is initialised with the version manager module, a version number and a first guardian.
-     * The wallet is created using the CREATE opcode.
-     * @param _owner The account address.
-     * @param _versionManager The version manager module
-     * @param _guardian The guardian address.
-     * @param _version The version of the feature bundle.
-     */
-    function createWallet(
-        address _owner,
-        address _versionManager,
-        address _guardian,
-        uint256 _version
-    )
-        external
-        onlyManager
-    {
-        validateInputs(_owner, _versionManager, _guardian, _version);
-        Proxy proxy = new Proxy(walletImplementation);
-        address payable wallet = address(proxy);
-        configureWallet(BaseWallet(wallet), _owner, _versionManager, _guardian, _version);
+    * @notice Adds a manager.
+    * @param _manager The address of the manager.
+    */
+    function addManager(address _manager) external onlyOwner {
+        require(_manager != address(0), "M: Address must not be null");
+        if (managers[_manager] == false) {
+            managers[_manager] = true;
+            emit ManagerAdded(_manager);
+        }
     }
      
     /**
@@ -91,22 +83,28 @@ contract WalletFactory is Owned, Managed {
      * @param _guardian The guardian address.
      * @param _salt The salt.
      * @param _version The version of the feature bundle.
+     * @param _r The r part of a manager's signature
+     * @param _s The s part of a manager's signature
+     * @param _v The v part of a manager's signature
      */
     function createCounterfactualWallet(
         address _owner,
         address _versionManager,
         address _guardian,
         bytes32 _salt,
-        uint256 _version
+        uint256 _version,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v
     )
         external
-        onlyManager
         returns (address _wallet)
     {
         validateInputs(_owner, _versionManager, _guardian, _version);
         bytes32 newsalt = newSalt(_salt, _owner, _versionManager, _guardian, _version);
         Proxy proxy = new Proxy{salt: newsalt}(walletImplementation);
         address payable wallet = address(proxy);
+        validateAuthorisedCreation(wallet, _r, _s, _v);
         configureWallet(BaseWallet(wallet), _owner, _versionManager, _guardian, _version);
         return wallet;
     }
@@ -219,8 +217,32 @@ contract WalletFactory is Owned, Managed {
     function validateInputs(address _owner, address _versionManager, address _guardian, uint256 _version) internal view {
         require(_owner != address(0), "WF: owner cannot be null");
         require(_owner != _guardian, "WF: owner cannot be guardian");
-        require(IModuleRegistry(moduleRegistry).isRegisteredModule(_versionManager), "WF: invalid _versionManager");
+        require(_versionManager != address(0), "WF: invalid _versionManager");
         require(_guardian != (address(0)), "WF: guardian cannot be null");
         require(_version > 0, "WF: invalid _version");
     }
+
+    /**
+     * @notice Throws if the sender is not a manager and the manager's signature for the
+     * creation of the new wallet is invalid.
+     * @param _wallet The wallet address
+     * @param _r The r part of a manager's signature
+     * @param _s The s part of a manager's signature
+     * @param _v The v part of a manager's signature
+     */
+    function validateAuthorisedCreation(
+        address _wallet,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v
+    ) internal view {
+        address manager;
+        if(uint256(_r) == 0) {
+            manager = msg.sender;
+        } else {
+            manager = ecrecover(keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", bytes32(uint256(_wallet)))), _v, _r, _s);
+        }
+        require(managers[manager], "WF: unauthorised wallet creation");
+    }
+
 }
