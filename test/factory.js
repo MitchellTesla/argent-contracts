@@ -29,7 +29,6 @@ contract("WalletFactory", (accounts) => {
     moduleRegistry = await ModuleRegistry.new();
     guardianStorage = await GuardianStorage.new();
     factory = await Factory.new(
-      moduleRegistry.address,
       implementation.address,
       guardianStorage.address);
     await factory.addManager(infrastructure);
@@ -47,49 +46,21 @@ contract("WalletFactory", (accounts) => {
   }
 
   beforeEach(async () => {
-    // Restore the good state of factory (we set these to bad addresses in some tests)
-    await factory.changeModuleRegistry(moduleRegistry.address);
-
     versionManager = await deployVersionManager();
     await moduleRegistry.registerModule(versionManager.address, ethers.utils.formatBytes32String("versionManager"));
   });
 
   describe("Create and configure the factory", () => {
-    it("should not allow to be created with empty ModuleRegistry", async () => {
-      await truffleAssert.reverts(Factory.new(
-        ZERO_ADDRESS,
-        implementation.address,
-        guardianStorage.address), "WF: ModuleRegistry address not defined");
-    });
-
     it("should not allow to be created with empty WalletImplementation", async () => {
       await truffleAssert.reverts(Factory.new(
-        moduleRegistry.address,
         ZERO_ADDRESS,
         guardianStorage.address), "WF: WalletImplementation address not defined");
     });
 
     it("should not allow to be created with empty GuardianStorage", async () => {
       await truffleAssert.reverts(Factory.new(
-        moduleRegistry.address,
         implementation.address,
         ZERO_ADDRESS), "WF: GuardianStorage address not defined");
-    });
-
-    it("should allow owner to change the module registry", async () => {
-      const randomAddress = utils.getRandomAddress();
-      await factory.changeModuleRegistry(randomAddress);
-      const updatedModuleRegistry = await factory.moduleRegistry();
-      assert.equal(updatedModuleRegistry, randomAddress);
-    });
-
-    it("should not allow owner to change the module registry to zero address", async () => {
-      await truffleAssert.reverts(factory.changeModuleRegistry(ethers.constants.AddressZero), "WF: address cannot be null");
-    });
-
-    it("should not allow non-owner to change the module registry", async () => {
-      const randomAddress = utils.getRandomAddress();
-      await truffleAssert.reverts(factory.changeModuleRegistry(randomAddress, { from: other }), "Must be owner");
     });
   });
 

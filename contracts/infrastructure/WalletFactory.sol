@@ -21,7 +21,6 @@ import "../wallet/BaseWallet.sol";
 import "./base/Owned.sol";
 import "./base/Managed.sol";
 import "./storage/IGuardianStorage.sol";
-import "./IModuleRegistry.sol";
 import "../modules/common/IVersionManager.sol";
 
 /**
@@ -29,20 +28,15 @@ import "../modules/common/IVersionManager.sol";
  * @notice The WalletFactory contract creates and assigns wallets to accounts.
  * @author Julien Niset - <julien@argent.xyz>
  */
-contract WalletFactory is Owned {
+contract WalletFactory is Managed {
 
-    // The address of the module dregistry
-    address public moduleRegistry;
     // The address of the base wallet implementation
     address public walletImplementation;
     // The address of the GuardianStorage
     address public guardianStorage;
-    // The managers
-    mapping (address => bool) public managers;
 
     // *************** Events *************************** //
 
-    event ModuleRegistryChanged(address addr);
     event WalletCreated(address indexed wallet, address indexed owner, address indexed guardian);
     event ManagerAdded(address indexed _manager);
 
@@ -51,11 +45,9 @@ contract WalletFactory is Owned {
     /**
      * @notice Default constructor.
      */
-    constructor(address _moduleRegistry, address _walletImplementation, address _guardianStorage) public {
-        require(_moduleRegistry != address(0), "WF: ModuleRegistry address not defined");
+    constructor(address _walletImplementation, address _guardianStorage) public {
         require(_walletImplementation != address(0), "WF: WalletImplementation address not defined");
         require(_guardianStorage != address(0), "WF: GuardianStorage address not defined");
-        moduleRegistry = _moduleRegistry;
         walletImplementation = _walletImplementation;
         guardianStorage = _guardianStorage;
     }
@@ -63,15 +55,11 @@ contract WalletFactory is Owned {
     // *************** External Functions ********************* //
 
     /**
-    * @notice Adds a manager.
+    * @notice Revokes a manager (unused).
     * @param _manager The address of the manager.
     */
-    function addManager(address _manager) external onlyOwner {
-        require(_manager != address(0), "M: Address must not be null");
-        if (managers[_manager] == false) {
-            managers[_manager] = true;
-            emit ManagerAdded(_manager);
-        }
+    function revokeManager(address _manager) override external {
+        revert("WF: managers can't be revoked");
     }
      
     /**
@@ -137,16 +125,6 @@ contract WalletFactory is Owned {
     }
 
     /**
-     * @notice Lets the owner change the address of the module registry contract.
-     * @param _moduleRegistry The address of the module registry contract.
-     */
-    function changeModuleRegistry(address _moduleRegistry) external onlyOwner {
-        require(_moduleRegistry != address(0), "WF: address cannot be null");
-        moduleRegistry = _moduleRegistry;
-        emit ModuleRegistryChanged(_moduleRegistry);
-    }
-
-    /**
      * @notice Inits the module for a wallet by doing nothing.
      * The method can only be called by the wallet itself.
      * @param _wallet The wallet.
@@ -200,7 +178,6 @@ contract WalletFactory is Owned {
      * The extra parameters are pre-hashed to be compatible with zk-sync CREATE2 API (!! the order of the parameters 
      * assumes https://github.com/matter-labs/zksync/pull/259 has been merged !!).
      * @param _salt The salt provided. In practice the hash of the L2 public key.
-     * @param _salt The slat provided.
      * @param _owner The owner address.
      * @param _versionManager The version manager module
      * @param _guardian The guardian address.
@@ -217,7 +194,7 @@ contract WalletFactory is Owned {
      * @param _guardian The guardian address
      * @param _version The version of feature bundle
      */
-    function validateInputs(address _owner, address _versionManager, address _guardian, uint256 _version) internal view {
+    function validateInputs(address _owner, address _versionManager, address _guardian, uint256 _version) internal pure {
         require(_owner != address(0), "WF: owner cannot be null");
         require(_owner != _guardian, "WF: owner cannot be guardian");
         require(_versionManager != address(0), "WF: invalid _versionManager");
