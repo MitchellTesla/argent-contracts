@@ -38,7 +38,6 @@ contract WalletFactory is Managed {
     // *************** Events *************************** //
 
     event WalletCreated(address indexed wallet, address indexed owner, address indexed guardian);
-    event ManagerAdded(address indexed _manager);
 
     // *************** Constructor ********************** //
 
